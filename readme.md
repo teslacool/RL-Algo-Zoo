@@ -20,5 +20,9 @@ git clone https://github.com/teslacool/RL-Algo-Zoo
 cd RL-Algo-Zoo 
 pip install -e .
 ```
+### Toy PPO
+```bash
+python run.py
+```
 
 

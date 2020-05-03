@@ -69,8 +69,10 @@ class ppo(object):
         self.nbatch_train = nbatch // nminibatches
 
         self.total_epoch = int(n_timesteps // nbatch)
-        self.lr_lambda = lr_lambda = lambda epoch:  lr(max(1e-4, 1 - epoch / self.total_epoch ))
-        self.optimizer = torch.optim.Adam(self.ac.parameters(), lr=lr_lambda(0.))
+
+        lr_start = lr(1.)
+        self.lr_lambda = lr_lambda = lambda epoch:  lr(max(1e-4, 1 - epoch / self.total_epoch )) / lr_start
+        self.optimizer = torch.optim.Adam(self.ac.parameters(), lr=lr_start)
         self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda)
 
         self.states = None
@@ -103,7 +105,7 @@ class ppo(object):
             fps = int(self.nbatch / (time.perf_counter() - tstart))
             if _epoch % self.log_freq == 0 and self.is_mpi_root:
                 logger.logkv('epoch', _epoch)
-                logger.logkv('lr', self.lr_lambda(_epoch))
+                logger.logkv('lr', self.optimizer.param_groups[0]['lr'])
                 logger.logkv('timesteps', (_epoch + 1) * self.nbatch)
                 logger.logkv('fps', fps)
                 logger.logkv('eprewmean', safemean([epinfo['r'] for epinfo in self.epinfobuf]))
