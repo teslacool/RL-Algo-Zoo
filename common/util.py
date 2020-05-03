@@ -8,7 +8,7 @@ def set_global_seeds(i):
     except ImportError:
         rank = 0
 
-    myseed = i  + 1000 * rank if i is not None else None
+    myseed = i
     torch.manual_seed(myseed)
     np.random.seed(myseed)
     random.seed(myseed)

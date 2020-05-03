@@ -6,7 +6,8 @@ import torch
 import torch.nn as nn
 from torch.distributions.normal import Normal
 from torch.distributions.categorical import Categorical
-from rlalgo.models import NatureCnn, CategoricalActor, CategoricalCritic
+from rlalgo.models import NatureCnn, CategoricalActor, CategoricalCritic, \
+    Mlp, NormalActor, NormalCritic
 
 def combined_shape(length, shape=None):
     if shape is None:
@@ -148,18 +149,51 @@ class CNNActorCritic(nn.Module):
         return dist, v
 
     def step(self, obs):
-        with torch.no_grad():
-            dist, v = self.forward(obs)
-            action = dist.sample()
-            neglogpacs = - dist.log_prob(action)
-            return action, v, None, neglogpacs
+
+        dist, v = self.forward(obs)
+        action = dist.sample()
+        neglogpacs = - dist.log_prob(action)
+        return action, v, None, neglogpacs
 
     def value(self, obs):
-        with torch.no_grad():
-            v = self.critic(obs)
+
+        v = self.critic(obs)
         return v
 
+    def neglogprob(self, dist, action):
+        return - dist.log_prob(action)
 
+
+class MlpActorCritic(nn.Module):
+
+    def __init__(self, observation_space, action_space, **ac_kwargs):
+        super().__init__()
+        self.observation_space = observation_space
+        self.action_space = action_space
+        latent = Mlp(indim=self.observation_space.shape[0])
+        self.actor = NormalActor(latent, action_space)
+        latent = Mlp(indim=self.observation_space.shape[0])
+        self.critic = NormalCritic(latent, action_space)
+
+    def forward(self, obs):
+        obs = obs.to(torch.float32)
+        dist, latent = self.actor(obs)
+        v = self.critic(obs)
+        return dist, v
+
+    def step(self, obs):
+        dist, v = self.forward(obs)
+        action = dist.sample()
+        neglogpacs = - torch.sum(dist.log_prob(action),dim=1)
+        return action, v, None, neglogpacs
+
+    def value(self, obs):
+        obs = obs.to(torch.float32)
+        v = self.critic(obs)
+        return v
+
+    def neglogprob(self, dist, action):
+        return - torch.sum(dist.log_prob(action), dim=1)
 
 
 

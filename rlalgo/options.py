@@ -3,6 +3,7 @@ from rlalgo import add_args
 from hyperparams import load_hyperparams
 import torch
 from torch import nn
+from common.buildenv import get_env_type
 
 def get_training_parser():
     parser, args = get_common_parser('training')
@@ -10,7 +11,8 @@ def get_training_parser():
     add_args(algo, parser)
     args, unknowargs = parser.parse_known_args()
     parser_extra(args, unknowargs)
-    hyparams = load_hyperparams(args.env, algo)
+    envtype, envid = get_env_type(args)
+    hyparams = load_hyperparams(envid, algo, envtype=envtype)
     hyparams.update(vars(args))
     vars(args).update(hyparams)
     return args
@@ -66,9 +68,8 @@ def get_common_parser(desc):
                         default=-1, type=int)
     common_group.add_argument('--save-freq', help='Save the model every n steps (if negative, no checkpoint)',
                         default=-1, type=int)
-    common_group.add_argument('--seed', help='RNG seed', type=int, default=1234)
+    common_group.add_argument('--seed', help='RNG seed', type=int, default=1)
     common_group.add_argument('--n_timesteps', type=float),
-    common_group.add_argument('--network', help='network type (mlp, cnn, lstm, cnn_lstm, conv_only)', default=None)
     common_group.add_argument('--num_env',
                         help='Number of environment copies being run in parallel. When not specified, set to number of cpus for Atari, and to 1 for Mujoco',
                         type=int)

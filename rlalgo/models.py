@@ -65,6 +65,38 @@ class NatureCnn(nn.Module):
         x = self.fc(x)
         return self.activ(x)
 
+class Mlp(nn.Module):
+
+    def __init__(self, indim, num_layers=2, num_hidden=64, acti=torch.nn.Tanh, layernorm=False):
+        super().__init__()
+        self.num_layers = num_layers
+        self.layers = nn.ModuleList()
+        if layernorm:
+            self.lns = nn.ModuleList()
+        self.layernorm = layernorm
+        self.activations = nn.ModuleList()
+        for i in range(num_layers):
+            self.layers.append(nn.Linear(indim if i == 0 else num_hidden, num_hidden))
+            if layernorm:
+                self.lns.append(torch.nn.LayerNorm(num_hidden))
+            self.activations.append(acti())
+
+    def reset_parameter(self):
+        init_f = lambda m: weights_init(m)
+        self.layers.apply(init_f)
+
+    def forward(self, x):
+        x = x.view(x.size(0), -1)
+        for i in range(self.num_layers):
+            x = self.layers[i](x)
+            if self.layernorm:
+                x = self.lns[i](x)
+            x = self.activations[i](x)
+        return x
+
+
+
+
 class CategoricalActor(nn.Module):
 
     def __init__(self, latent_module, ac_space, indim=512):
@@ -94,6 +126,40 @@ class CategoricalActor(nn.Module):
     def forward(self, x):
         return self._distribution(x)
 
+
+class NormalActor(nn.Module):
+
+    def __init__(self, latent_module, ac_space, indim=64):
+        super().__init__()
+        assert isinstance(ac_space, gym.spaces.Box)
+        self.latent = latent_module
+        self.nact = ac_space.shape[0]
+        if indim == self.nact:
+            self.mean = None
+        else:
+            self.mean = nn.Linear(indim, self.nact)
+        self.logstd = nn.Parameter(torch.zeros(1, self.nact))
+
+    def reset_parameter(self):
+        if self.mean is not None:
+            weights_init(self.mean, gain=1)
+
+    def _distribution(self, obs):
+        latent = self.latent(obs)
+        if self.mean:
+            mean = self.mean(latent)
+        else:
+            mean = latent
+        logstd = mean * 0 + self.logstd
+        logstd = torch.exp(logstd)
+
+        return Normal(mean, logstd), latent
+
+    def forward(self, x):
+        return self._distribution(x)
+
+
+
 class CategoricalCritic(nn.Module):
 
     def __init__(self, latent_module, ac_space, indim=512, estimate_q=False):
@@ -114,9 +180,32 @@ class CategoricalCritic(nn.Module):
         assert latent is not None or isObs
         if isObs:
             latent = self.latent(obs)
-            return self.matching(latent).squeeze()
+            return self.matching(latent).squeeze(-1)
         else:
-            return self.matching(latent).squeeze()
+            return self.matching(latent).squeeze(-1)
+
+class NormalCritic(nn.Module):
+
+    def __init__(self, latent_module, ac_space, indim=64, estimate_q=False):
+        super().__init__()
+        assert isinstance(ac_space, gym.spaces.Box)
+        self.latent = latent_module
+        self.nact = ac_space.shape[0]
+        if estimate_q:
+            raise NotImplementedError
+        else:
+            self.matching = nn.Linear(indim, 1)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        weights_init(self.matching, gain=1.)
+
+    def forward(self, obs, ):
+        latent = self.latent(obs)
+        return self.matching(latent).squeeze(-1)
+
+
+
 
 
 

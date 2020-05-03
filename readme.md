@@ -9,11 +9,12 @@ and [Baselines](https://github.com/hill-a/stable-baselines). I will try to compl
 ## Algorithms
 - [ ] PPO
 - [ ] SAC
+- [ ] More...
 
 ## Getting Started
 ### Requirements and Installation
-* Pytorch >= 1.4
-* Python >= 3.6
+* Pytorch >= 1.5
+* Python >= 3.6.1
 
 ```bash
 git clone https://github.com/teslacool/RL-Algo-Zoo

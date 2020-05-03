@@ -14,7 +14,7 @@ class VecNormalize(VecEnvWrapper):
             self.ob_rms = TfRunningMeanStd(shape=self.observation_space.shape, scope='ob_rms') if ob else None
             self.ret_rms = TfRunningMeanStd(shape=(), scope='ret_rms') if ret else None
         else:
-            from baselines.common.running_mean_std import RunningMeanStd
+            from common.running_mean_std import RunningMeanStd
             self.ob_rms = RunningMeanStd(shape=self.observation_space.shape) if ob else None
             self.ret_rms = RunningMeanStd(shape=()) if ret else None
         self.clipob = clipob

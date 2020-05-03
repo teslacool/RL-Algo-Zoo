@@ -23,7 +23,7 @@ def constfn(val):
 @register_algo('ppo')
 class ppo(object):
 
-    def __init__(self, env_fn, actor_critic=core.CNNActorCritic, ac_kwargs=dict(), seed=0,
+    def __init__(self, env_fn, actor_critic='cnn', ac_kwargs=dict(),
         nsteps=2048, n_timesteps=1e6, gamma=0.99, clip_ratio=0.2, lr=3e-4,
         vf_coef=0.5, ent_coef=0.0, lam=0.95, max_ep_len=1000, max_grad_norm=0.5,
         save_freq=10, eval_freq=10, log_freq=1, nminibatches=4, noptepochs=4,):
@@ -35,7 +35,7 @@ class ppo(object):
         self.ent_coef = ent_coef
         self.lam = lam
         self.max_ep_len = max_ep_len
-        self.max_grad_norm =max_grad_norm
+        self.max_grad_norm = max_grad_norm
         self.noptepochs = noptepochs
         self.gamma = gamma
         self.nsteps = nsteps
@@ -43,7 +43,10 @@ class ppo(object):
 
         self.train_env = env_fn(False)
         self.obs = self.train_env.reset()
-
+        if actor_critic == 'cnn':
+            actor_critic = core.CNNActorCritic
+        else:
+            actor_critic = core.MlpActorCritic
         self.ac = actor_critic(self.train_env.observation_space, self.train_env.action_space, **ac_kwargs)
         preparemodel(self.ac)
 
@@ -77,11 +80,16 @@ class ppo(object):
 
         self.states = None
 
+    @staticmethod
+    def add_args(parser: argparse.ArgumentParser):
+        algo_group = parser.add_argument_group('algo configuration', argument_default=argparse.SUPPRESS)
+        algo_group.add_argument('--actor_critic', type=str, )
+        return parser
 
 
 
     def train(self):
-
+        first_tstart = time.perf_counter()
         for _epoch in range(self.total_epoch):
             tstart = time.perf_counter()
             frac = 1. - _epoch * 1. / self.total_epoch
@@ -110,7 +118,7 @@ class ppo(object):
                 logger.logkv('fps', fps)
                 logger.logkv('eprewmean', safemean([epinfo['r'] for epinfo in self.epinfobuf]))
                 logger.logkv('eplenmean', safemean([epinfo['l'] for epinfo in self.epinfobuf]))
-
+                logger.logkv('time_elapsed', time.perf_counter() - first_tstart)
                 logger.dump_tabular()
 
     def update(self, obs, returns, masks, actions, values, neglogpacs, clip_ratio, states):
@@ -126,7 +134,7 @@ class ppo(object):
                     advs_mnb = returns_mnb - values_mnb
                     advs_mnb = (advs_mnb - advs_mnb.mean()) / (advs_mnb.std() + 1e-8)
                     dist, v_now = self.ac(obs_mnb)
-                    neglogpacs_now = - dist.log_prob(actions_mnb)
+                    neglogpacs_now = self.ac.neglogprob(dist, actions_mnb)
                     entropy = dist.entropy().mean()
 
                     clip_v = values_mnb + torch.clamp(v_now - values_mnb, -clip_ratio, clip_ratio)
@@ -200,10 +208,6 @@ class ppo(object):
                 mb_states, epinfos)
 
 
-    @staticmethod
-    def add_args(parser: argparse.ArgumentParser):
-        algo_group = parser.add_argument_group('algo configuration', argument_default=argparse.SUPPRESS)
-        return parser
 
 def sf01(t):
     s = t.shape

@@ -1,7 +1,7 @@
 import os
 import yaml
 import io
-def load_hyperparams(env_id, algo):
+def load_hyperparams(env_id, algo, envtype):
     hypar_dir = os.path.dirname(__file__)
     hypar_fn = os.path.join(hypar_dir, '{}.yml'.format(algo))
     assert os.path.exists(hypar_fn), '{} not found'.format(hypar_fn)
@@ -11,6 +11,8 @@ def load_hyperparams(env_id, algo):
             hyperparams = hyperparams_dict[env_id]
         elif 'NoFrameskip' in env_id:
             hyperparams = hyperparams_dict['atari']
+        elif envtype is not None:
+            hyperparams = hyperparams_dict[envtype]
         else:
             raise ValueError("Hyperparameters not found for {}-{}".format(algo, env_id))
     for k in hyperparams.keys():
