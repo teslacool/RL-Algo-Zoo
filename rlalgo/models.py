@@ -142,7 +142,7 @@ class NormalActor(nn.Module):
 
     def reset_parameter(self):
         if self.mean is not None:
-            weights_init(self.mean, gain=1)
+            weights_init(self.mean, gain=0.01)
 
     def _distribution(self, obs):
         latent = self.latent(obs)

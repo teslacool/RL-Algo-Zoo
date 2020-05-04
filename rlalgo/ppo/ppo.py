@@ -171,10 +171,10 @@ class ppo(object):
             for _ in range(self.nsteps):
                 obs = np2tentor(self.obs)
                 actions, values, self.states, neglogpacs = self.ac.step(obs)
-                mb_obs.append(obs.detach())
-                mb_actions.append(actions.detach())
-                mb_values.append(values.detach())
-                mb_neglogpacs.append(neglogpacs.detach())
+                mb_obs.append(obs)
+                mb_actions.append(actions)
+                mb_values.append(values)
+                mb_neglogpacs.append(neglogpacs)
                 mb_dones.append(np2tentor(self.dones))
                 actions = tensor2np(actions)
                 self.obs, rewards, self.dones, infos = self.train_env.step(actions)
@@ -188,7 +188,7 @@ class ppo(object):
             mb_values = torch.stack(mb_values, dim=1)
             mb_neglogpacs = torch.stack(mb_neglogpacs, dim=1)
             mb_dones = torch.stack(mb_dones, dim=1)
-            last_values = self.ac.value(np2tentor(self.obs)).detach()
+            last_values = self.ac.value(np2tentor(self.obs))
 
             # discount/bootstrap off value fn
             mb_advs = mb_rewards.new_zeros(mb_rewards.size())
