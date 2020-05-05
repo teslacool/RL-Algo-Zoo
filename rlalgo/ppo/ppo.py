@@ -84,6 +84,7 @@ class ppo(object):
     def add_args(parser: argparse.ArgumentParser):
         algo_group = parser.add_argument_group('algo configuration', argument_default=argparse.SUPPRESS)
         algo_group.add_argument('--actor_critic', type=str, )
+        algo_group.add_argument('--lr', type=float,)
         return parser
 
 

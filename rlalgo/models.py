@@ -4,6 +4,7 @@ from torch.distributions.normal import Normal
 from torch.distributions.categorical import Categorical
 import gym
 import math
+import numpy as np
 
 def np2tentor(t):
     if torch.cuda.is_available():
@@ -21,13 +22,34 @@ def preparemodel(m):
     if torch.cuda.is_available():
         m.cuda()
 
+def baselines_orthogonal_(tensor, gain=1):
+
+    if tensor.ndimension() < 2:
+        raise ValueError("Only tensors with 2 or more dimensions are supported")
+
+    rows = tensor.size(0)
+    cols = tensor.numel() // rows
+    flattened = np.random.normal(0., 1., (cols, rows))
+    u, _, v = np.linalg.svd(flattened, full_matrices=False)
+    q = u if u.shape == (cols, rows) else v
+    assert q.shape == (cols, rows)
+    q = q.transpose()
+    assert q.shape[0] == tensor.shape[0]
+    q = q.reshape(tensor.shape)
+
+
+    with torch.no_grad():
+        tensor.copy_(torch.from_numpy(q))
+        tensor.mul_(gain)
+    return tensor
+
 
 def weights_init(m, gain=float(math.sqrt(2))):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
-        nn.init.orthogonal_(m.weight.data, gain=gain)
+        baselines_orthogonal_(m.weight.data, gain=gain)
     if classname.find('Linear') != -1:
-        nn.init.orthogonal_(m.weight.data, gain=gain)
+        baselines_orthogonal_(m.weight.data, gain=gain)
 
 class NatureCnn(nn.Module):
 
