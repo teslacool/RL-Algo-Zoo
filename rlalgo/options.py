@@ -68,7 +68,7 @@ def get_common_parser(desc):
                         default=-1, type=int)
     common_group.add_argument('--save-freq', help='Save the model every n steps (if negative, no checkpoint)',
                         default=-1, type=int)
-    common_group.add_argument('--seed', help='RNG seed', type=int, default=0)
+    common_group.add_argument('--seed', help='RNG seed', type=int, default=1)
     common_group.add_argument('--n_timesteps', type=float),
     common_group.add_argument('--num_env',
                         help='Number of environment copies being run in parallel. When not specified, set to number of cpus for Atari, and to 1 for Mujoco',

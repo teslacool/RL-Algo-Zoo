@@ -95,7 +95,7 @@ class ppo(object):
             tstart = time.perf_counter()
             frac = 1. - _epoch * 1. / self.total_epoch
             clip_ratio_now = self.clip_ratio(frac)
-            if _epoch % self.log_freq == 0 and self.is_mpi_root:
+            if (_epoch % self.log_freq == 0 or _epoch == self.total_epoch - 1 ) and self.is_mpi_root:
                 logger.log('Stepping environment...')
 
             # collect data
@@ -103,7 +103,7 @@ class ppo(object):
             # if eval_env is not None:
             #     eval_obs, eval_returns, eval_masks, eval_actions, eval_values, eval_neglogpacs, eval_states, eval_epinfos = eval_runner.run()  # pylint: disable=E0632
 
-            if _epoch % self.log_freq == 0 and self.is_mpi_root:
+            if (_epoch % self.log_freq == 0 or _epoch == self.total_epoch - 1 ) and self.is_mpi_root:
                 logger.log('done')
 
             self.epinfobuf.extend(epinfos)
@@ -112,7 +112,7 @@ class ppo(object):
             self.update(obs, returns, masks, actions, values, neglogpacs, clip_ratio_now, states)
             self.lr_scheduler.step()
             fps = int(self.nbatch / (time.perf_counter() - tstart))
-            if _epoch % self.log_freq == 0 and self.is_mpi_root:
+            if (_epoch % self.log_freq == 0 or _epoch == self.total_epoch - 1 ) and self.is_mpi_root:
                 logger.logkv('epoch', _epoch)
                 logger.logkv('lr', self.optimizer.param_groups[0]['lr'])
                 logger.logkv('timesteps', (_epoch + 1) * self.nbatch)
