@@ -1,4 +1,6 @@
 import numpy as np
+import torch
+from torch import nn
 
 class RunningMeanStd(object):
     # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
@@ -29,6 +31,42 @@ def update_mean_var_count_from_moments(mean, var, count, batch_mean, batch_var, 
     new_count = tot_count
 
     return new_mean, new_var, new_count
+
+class TorchRunningMeanStd(nn.Module):
+
+    def __init__(self, epsilon=1e-4, shape=()):
+        super().__init__()
+        self.register_buffer('_mean', torch.zeros(shape))
+        self.register_buffer('_var', torch.zeros(shape))
+        self.register_buffer('_count', torch.tensor(epsilon))
+        self._set_para()
+
+    def _set_para(self):
+        self.mean = np.copy(self._mean.cpu().numpy())
+        self.var = np.copy(self._var.cpu().numpy())
+        self.count = np.copy(self._count.cpu().numpy())
+
+    def state_dict(self, destination=None, prefix='', keep_vars=False):
+        self._get_para()
+        super().state_dict(destination=destination, prefix=prefix, keep_vars=keep_vars)
+
+    def _get_para(self):
+        self._mean.copy_(torch.from_numpy(np.asarray(self.mean)).to(self._mean.device))
+        self._var.copy_(torch.from_numpy(np.asarray(self.var)).to(self._var.device))
+        self._count.copy_(torch.from_numpy(np.asarray(self.count)).to(self._count.device))
+
+    def update(self, x):
+        batch_mean = np.mean(x, axis=0)
+        batch_var = np.var(x, axis=0)
+        batch_count = x.shape[0]
+        self.update_from_moments(batch_mean, batch_var, batch_count)
+
+    def update_from_moments(self, batch_mean, batch_var, batch_count):
+        self.mean, self.var, self.count = update_mean_var_count_from_moments(
+            self.mean, self.var, self.count, batch_mean, batch_var, batch_count)
+
+
+
 
 
 class TfRunningMeanStd(object):

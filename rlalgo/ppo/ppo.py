@@ -9,7 +9,7 @@ from common import logger
 from rlalgo.models import preparemodel, np2tentor, tensor2np
 import time
 from collections import deque
-
+import os
 try:
     from mpi4py import MPI
 except ImportError:
@@ -26,7 +26,8 @@ class ppo(object):
     def __init__(self, env_fn, actor_critic='cnn', ac_kwargs=dict(),
         nsteps=2048, n_timesteps=1e6, gamma=0.99, clip_ratio=0.2, lr=3e-4,
         vf_coef=0.5, ent_coef=0.0, lam=0.95, max_ep_len=1000, max_grad_norm=0.5,
-        save_freq=10, eval_freq=10, log_freq=1, nminibatches=4, noptepochs=4,):
+        save_freq=10, eval_freq=10, log_freq=1, nminibatches=4, noptepochs=4,
+        load=False):
 
         self.log_freq = log_freq
         self.save_freq = save_freq
@@ -47,8 +48,7 @@ class ppo(object):
             actor_critic = core.CNNActorCritic
         else:
             actor_critic = core.MlpActorCritic
-        self.ac = actor_critic(self.train_env.observation_space, self.train_env.action_space, **ac_kwargs)
-        preparemodel(self.ac)
+        self.ac = actor_critic(self.train_env.observation_space, self.train_env.action_space, env=self.train_env, **ac_kwargs,)
 
         sync_params(self.ac)
         var_counts = tuple(core.count_vars(module) for module in [self.ac.actor, self.ac.critic])
@@ -79,19 +79,44 @@ class ppo(object):
         self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda)
 
         self.states = None
+        self._epoch = 0
+        preparemodel(self.ac)
+        if load:
+            self.load_model()
 
     @staticmethod
     def add_args(parser: argparse.ArgumentParser):
         algo_group = parser.add_argument_group('algo configuration', argument_default=argparse.SUPPRESS)
         algo_group.add_argument('--actor_critic', type=str, )
         algo_group.add_argument('--lr', type=float,)
+        algo_group.add_argument('--load', action='store_true')
         return parser
 
 
+    def load_model(self, model_path=None):
+        if model_path is None:
+            model_path = os.path.join(logger.get_dir(), 'models', 'checkpoint.pt')
+        state_dict = torch.load(model_path)
+        self._epoch = state_dict['epoch']
+        self.ac.load_state_dict(state_dict['state_dict'])
+        self.optimizer.load_state_dict(state_dict['optimizer'])
+        self.lr_scheduler.load_state_dict(state_dict['lr_scheduler'])
+
+    def save_model(self, modelfn=None):
+        modelfn = modelfn if modelfn else 'checkpoint.pt'
+        modelpath = os.path.join(logger.get_dir(), 'models', modelfn)
+        os.makedirs(os.path.join(logger.get_dir(), 'models'), exist_ok=True)
+        state_dict = {
+            'epoch': self._epoch + 1,
+            'state_dict': self.ac.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
+            'lr_scheduler': self.lr_scheduler.state_dict(),
+        }
+        torch.save(state_dict, modelpath)
 
     def train(self):
         first_tstart = time.perf_counter()
-        for _epoch in range(self.total_epoch):
+        for _epoch in range(self._epoch, self.total_epoch):
             tstart = time.perf_counter()
             frac = 1. - _epoch * 1. / self.total_epoch
             clip_ratio_now = self.clip_ratio(frac)
@@ -121,6 +146,8 @@ class ppo(object):
                 logger.logkv('eplenmean', safemean([epinfo['l'] for epinfo in self.epinfobuf]))
                 logger.logkv('time_elapsed', time.perf_counter() - first_tstart)
                 logger.dump_tabular()
+                self._epoch = _epoch
+                self.save_model()
 
     def update(self, obs, returns, masks, actions, values, neglogpacs, clip_ratio, states):
         if states is None:
@@ -207,8 +234,6 @@ class ppo(object):
 
             return (*map(sf01, (mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs)),
                 mb_states, epinfos)
-
-
 
 def sf01(t):
     s = t.shape
