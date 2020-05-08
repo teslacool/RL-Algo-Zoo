@@ -15,6 +15,7 @@ try:
 except ImportError:
     MPI = None
 
+
 def constfn(val):
     def f(_):
         return val
@@ -26,7 +27,7 @@ class ppo(object):
     def __init__(self, env_fn, actor_critic='cnn', ac_kwargs=dict(),
         nsteps=2048, n_timesteps=1e6, gamma=0.99, clip_ratio=0.2, lr=3e-4,
         vf_coef=0.5, ent_coef=0.0, lam=0.95, max_ep_len=1000, max_grad_norm=0.5,
-        save_freq=10, eval_freq=10, log_freq=1, nminibatches=4, noptepochs=4,
+        save_freq=10, eval_freq=10, log_freq=10, nminibatches=4, noptepochs=4,
         load=False):
 
         self.log_freq = log_freq
@@ -42,7 +43,7 @@ class ppo(object):
         self.nsteps = nsteps
         setup_pytorch_for_mpi()
 
-        self.train_env = env_fn(False)
+        self.train_env = env_fn()
         self.obs = self.train_env.reset()
         if actor_critic == 'cnn':
             actor_critic = core.CNNActorCritic

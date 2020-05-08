@@ -62,13 +62,12 @@ def get_common_parser(desc):
     common_group.add_argument('--env_type', help='type of environment, used when the environment type cannot be automatically determined',
                               type=str, default=None)
     common_group.add_argument('--algo', help='Algorithm', type=str, default='ppo')
-    common_group.add_argument('--log-freq', help='Override log interval (default: -1, no change)', default=100,
-                        type=int)
+    common_group.add_argument('--log-freq', help='Override log interval (default: -1, no change)', type=int)
     common_group.add_argument('--eval-freq', help='Evaluate the agent every n steps (if negative, no evaluation)',
                         default=-1, type=int)
     common_group.add_argument('--save-freq', help='Save the model every n steps (if negative, no checkpoint)',
                         default=-1, type=int)
-    common_group.add_argument('--seed', help='RNG seed', type=int, default=1)
+    common_group.add_argument('--seed', help='RNG seed', type=int, default=0)
     common_group.add_argument('--n_timesteps', type=float),
     common_group.add_argument('--num_env',
                         help='Number of environment copies being run in parallel. When not specified, set to number of cpus for Atari, and to 1 for Mujoco',

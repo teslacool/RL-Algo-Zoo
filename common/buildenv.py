@@ -36,7 +36,7 @@ _game_envs['retro'] = {
     'SpaceInvaders-Snes',
 }
 
-def build_env(args, test=False):
+def build_env(args, norm=True):
     # TODO: reconstruct it more easily to read
     ncpu = multiprocessing.cpu_count()
     if sys.platform == 'darwin': ncpu //= 2
@@ -59,9 +59,9 @@ def build_env(args, test=False):
     else:
         flatten_dict_observations = alg not in {'her'}
         env = make_vec_env(env_id, env_type, args.num_env or 1, seed, reward_scale=args.reward_scale, flatten_dict_observations=flatten_dict_observations)
-
-        if env_type == 'mujoco':
-            env = VecNormalize(env, use_torch=True)
+        if norm:
+            if env_type == 'mujoco':
+                env = VecNormalize(env, use_torch=True)
 
     return env
 

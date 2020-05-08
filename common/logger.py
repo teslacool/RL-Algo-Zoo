@@ -149,7 +149,7 @@ class TensorBoardOutputFormat(KVWriter):
 
     def writekvs(self, kvs):
         def summary_val(k, v):
-            return k, v
+            return k, float(v)
         step = kvs.get('timesteps', self.step)
         for k, v in kvs.items():
             self.writer.add_scalar(*summary_val(k,v), step)

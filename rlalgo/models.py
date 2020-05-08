@@ -102,6 +102,7 @@ class Mlp(nn.Module):
             if layernorm:
                 self.lns.append(torch.nn.LayerNorm(num_hidden))
             self.activations.append(acti())
+        self.reset_parameter()
 
     def reset_parameter(self):
         init_f = lambda m: weights_init(m)
@@ -161,6 +162,7 @@ class NormalActor(nn.Module):
         else:
             self.mean = nn.Linear(indim, self.nact)
         self.logstd = nn.Parameter(torch.zeros(1, self.nact))
+        self.reset_parameter()
 
     def reset_parameter(self):
         if self.mean is not None:
