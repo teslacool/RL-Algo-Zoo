@@ -186,6 +186,8 @@ class sac(object):
 
     def update(self):
         for _ in range(self.update_every):
+            self.optimizer.zero_grad()
+
             data = self.buffer.sample_batch(self.batch_size)
             o, a, r, o2, d = data['obs'], data['act'], data['rew'], data['obs2'], data['done']
 
@@ -202,20 +204,23 @@ class sac(object):
             loss_q1 = torch.mean(torch.square(q1 - backup))
             loss_q2 = torch.mean(torch.square(q2 - backup))
             loss_q = loss_q1 + loss_q2
-
+            loss_q.backward()
             # compute loss pi
+            for p in self.ac.q1.parameters():
+                p.requires_grad = False
+            for p in self.ac.q2.parameters():
+                p.requires_grad = False
             pi, logp_pi = self.ac.step(o)
-            with torch.no_grad():
-                q1_pi = self.ac.q1(o, pi)
-                q2_pi = self.ac.q2(o, pi)
-                q_pi = torch.min(q1_pi, q2_pi)
+            q1_pi = self.ac.q1(o, pi)
+            q2_pi = self.ac.q2(o, pi)
+            q_pi = torch.min(q1_pi, q2_pi)
             loss_pi = torch.mean((self.alpha * logp_pi - q_pi))
-
-            loss = loss_q + loss_pi
-            self.optimizer.zero_grad()
-            loss.backward()
+            loss_pi.backward()
             self.optimizer.step()
-            logger.logkv_mean('loss', loss.item())
+            for p in self.ac.q1.parameters():
+                p.requires_grad = True
+            for p in self.ac.q2.parameters():
+                p.requires_grad = True
             logger.logkv_mean('loss_q', loss_q.item())
             logger.logkv_mean('loss_pi', loss_pi.item())
             with torch.no_grad():

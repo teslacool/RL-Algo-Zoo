@@ -63,7 +63,7 @@ class SacActor(nn.Module):
             logp = None
 
         action = torch.tanh(action)
-        action *= self.action_scale
+        action = action *  self.action_scale
 
         return action, logp
 
