@@ -43,7 +43,7 @@ class ppo(object):
         self.nsteps = nsteps
         setup_pytorch_for_mpi()
 
-        self.train_env = env_fn(True)
+        self.train_env = env_fn({'norm': True})
         self.obs = self.train_env.reset()
         if actor_critic == 'cnn':
             actor_critic = core.CNNActorCritic

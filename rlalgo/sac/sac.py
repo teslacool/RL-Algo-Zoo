@@ -20,31 +20,33 @@ class ReplayBuffer:
     A simple FIFO experience replay buffer for SAC agents.
     """
 
-    def __init__(self, obs_dim, act_dim, size):
-        self.obs_buf = np.zeros(core.combined_shape(size, obs_dim), dtype=np.float32)
-        self.obs2_buf = np.zeros(core.combined_shape(size, obs_dim), dtype=np.float32)
-        self.act_buf = np.zeros(core.combined_shape(size, act_dim), dtype=np.float32)
-        self.rew_buf = np.zeros(size, dtype=np.float32)
-        self.done_buf = np.zeros(size, dtype=np.bool)
+    def __init__(self, obs_dim, act_dim, size, num_env=1):
+        self.obs_buf = np2tentor(np.zeros(core.combined_shape(size, obs_dim), dtype=np.float32))
+        self.obs2_buf = np2tentor(np.zeros(core.combined_shape(size, obs_dim), dtype=np.float32))
+        self.act_buf = np2tentor(np.zeros(core.combined_shape(size, act_dim), dtype=np.float32))
+        self.rew_buf = np2tentor(np.zeros(size, dtype=np.float32))
+        self.done_buf = np2tentor(np.zeros(size, dtype=np.bool))
         self.ptr, self.size, self.max_size = 0, 0, size
+        self.num_env = num_env
+        assert self.max_size % self.num_env == 0
 
     def store(self, obs, act, rew, next_obs, done):
-        self.obs_buf[self.ptr] = obs
-        self.obs2_buf[self.ptr] = next_obs
-        self.act_buf[self.ptr] = act
-        self.rew_buf[self.ptr] = rew
-        self.done_buf[self.ptr] = done
-        self.ptr = (self.ptr+1) % self.max_size
-        self.size = min(self.size+1, self.max_size)
+        self.obs_buf[self.ptr: self.ptr+self.num_env] = np2tentor(obs)
+        self.obs2_buf[self.ptr: self.ptr+self.num_env] = np2tentor(next_obs)
+        self.act_buf[self.ptr: self.ptr+self.num_env] = np2tentor(act)
+        self.rew_buf[self.ptr: self.ptr+self.num_env] = np2tentor(rew)
+        self.done_buf[self.ptr: self.ptr+self.num_env] = np2tentor(done)
+        self.ptr = (self.ptr+self.num_env) % self.max_size
+        self.size = min(self.size+self.num_env, self.max_size)
 
     def sample_batch(self, batch_size=32):
         idxs = np.random.randint(0, self.size, size=batch_size)
-        batch = dict(obs=self.obs_buf[idxs],
+        return dict(obs=self.obs_buf[idxs],
                      obs2=self.obs2_buf[idxs],
                      act=self.act_buf[idxs],
                      rew=self.rew_buf[idxs],
                      done=self.done_buf[idxs])
-        return {k: np2tentor(v) for k,v in batch.items()}
+
 
 
 def constfn(val):
@@ -60,7 +62,8 @@ class sac(object):
                  nsteps=2048, n_timesteps=1e6, gamma=0.99, replay_size=int(1e6),
                  polyak=0.995, lr=3e-4, batch_size=256, start_steps=10000,
                  update_after=1000, num_test_episodes=10, max_ep_len=1000,
-                 log_freq=10, load=False, update_every=50, alpha=0.2):
+                 log_freq=10, load=False, update_every=48, alpha=0.2,
+                 env_norm=False, num_env=1):
         self.batch_size = batch_size
         self.start_steps =start_steps
         self.update_after = update_after
@@ -74,7 +77,10 @@ class sac(object):
         self.polyak = polyak
         self.alpha = alpha
         # mujoco num_env=1
-        self.train_env, self.test_env = env_fn(False), env_fn(False)
+        self.train_env = env_fn({'norm': env_norm, 'numenv': num_env})
+        self.nenv = self.train_env.num_envs
+        assert self.update_every % self.nenv == 0
+        self.test_env =  env_fn({'norm': env_norm, 'numenv': num_test_episodes})
         self.ac = core.MLPActorCritic(self.train_env.observation_space, self.train_env.action_space,
                                       env=self.train_env, **ac_kwargs)
         self.ac_targ = deepcopy(self.ac)
@@ -85,7 +91,8 @@ class sac(object):
             self.test_env.ret_rms = self.test_env.ret_rms
         self.buffer = ReplayBuffer(obs_dim=self.train_env.observation_space.shape[0],
                                    act_dim=self.train_env.action_space.shape[0],
-                                   size=replay_size)
+                                   size=replay_size,
+                                   num_env=num_env)
         var_counts = tuple(core.count_vars(module) for module in [self.ac.actor, self.ac.q1, self.ac.q2])
         logger.log('\nNumber of parameters: \t pi: %d, \t q1: %d, \t q2: %d\n' % var_counts)
 
@@ -134,38 +141,32 @@ class sac(object):
         algo_group.add_argument('--actor_critic', type=str, )
         algo_group.add_argument('--lr', type=float, )
         algo_group.add_argument('--load', action='store_true')
+        algo_group.add_argument('--env_norm', action='store_true')
         return parser
 
     def train(self):
 
-        o, ep_ret, ep_len = self.train_env.reset(), 0, 0
+        o = self.train_env.reset()
         first_tstart = time.perf_counter()
         for _epoch in range(self._epoch, self.total_epoch):
             tstart = time.perf_counter()
-            for _t in range(self.nsteps):
+            for _t in range(0, self.nsteps, self.nenv):
 
                 if self._t > self.start_steps:
                     a = self.ac.act(np2tentor(o))
                     a = action4env(a)
                 else:
-                    a = self.train_env.action_space.sample()
-                    a = np.expand_dims(a, 0)
-                o2, r, d, _ = self.train_env.step(a)
-                r = float(r)
-                d = bool(d)
-                ep_len += 1
-                ep_ret += r
-
-                d = False if ep_len==self.max_ep_len else d
+                    a = np.concatenate([self.train_env.action_space.sample().reshape(1, -1)
+                                        for _ in range(self.nenv)], axis=0)
+                o2, r, d, infos = self.train_env.step(a)
                 self.buffer.store(o, a, r, o2, d)
                 o = o2
-
-                if d or (ep_len == self.max_ep_len):
-                    logger.logkv_mean('eprew', ep_ret)
-                    logger.logkv_mean('eplen', ep_len)
-                    o, ep_ret, ep_len = self.train_env.reset(), 0, 0
-
-                self._t += 1
+                for info in infos:
+                    maybeepinfo = info.get('episode')
+                    if maybeepinfo:
+                        logger.logkv_mean('eprewtrain', maybeepinfo['r'])
+                        logger.logkv_mean('eplentrain', maybeepinfo['l'])
+                self._t += self.nenv
                 if self._t >= self.update_after and self._t % self.update_every == 0:
                     self.update()
                 if self._t > self.n_timesteps:
@@ -230,17 +231,20 @@ class sac(object):
 
     def test_agent(self):
         for j in range(self.num_test_episodes):
-            o, d, ep_ret, ep_len = self.test_env.reset(), False, 0, 0
-            while not(d or (ep_len == self.max_ep_len)):
+            o = self.test_env.reset()
+            i = 0
+            while True:
                 # Take deterministic actions at test time
                 a = self.ac.act(np2tentor(o), deterministic=True)
-                o, r, d, _ = self.test_env.step(tensor2np(a))
-                r = float(r)
-                d = bool(d)
-                ep_ret += r
-                ep_len += 1
-            logger.logkv_mean('testeprew', ep_ret)
-            logger.logkv_mean('testeplen', ep_len)
+                o, r, d, infos = self.test_env.step(tensor2np(a))
+                for info in infos:
+                    maybeepinfo = info.get('episode')
+                    if maybeepinfo:
+                        logger.logkv_mean('eprewmean', maybeepinfo['r'])
+                        logger.logkv_mean('eplenmean', maybeepinfo['l'])
+                        i += 1
+                        if i == 10:
+                            return
 
 
 

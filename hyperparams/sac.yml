@@ -1,5 +1,5 @@
 mujoco:
-  num_env: 1
+  num_env: 8
   nsteps: 2048
   n_timesteps: !!float 1e6
   lr: !!float 3e-4
