@@ -63,7 +63,7 @@ class sac(object):
                  polyak=0.995, lr=3e-4, batch_size=256, start_steps=10000,
                  update_after=1000, num_test_episodes=10, max_ep_len=1000,
                  log_freq=10, load=False, update_every=48, alpha=0.2,
-                 env_norm=False, num_env=1):
+                 env_norm=False, num_env=1, update_nbatch=8):
         self.batch_size = batch_size
         self.start_steps =start_steps
         self.update_after = update_after
@@ -76,6 +76,8 @@ class sac(object):
         self.gamma = gamma
         self.polyak = polyak
         self.alpha = alpha
+        self.update_nbatch = update_nbatch
+        assert update_every % update_nbatch == 0
         # mujoco num_env=1
         self.train_env = env_fn({'norm': env_norm, 'numenv': num_env})
         self.nenv = self.train_env.num_envs
@@ -172,7 +174,7 @@ class sac(object):
                 if self._t > self.n_timesteps:
                     break
 
-            fps = int(_t / (time.perf_counter() - tstart))
+            fps = int((_t + self.nenv - 1) / (time.perf_counter() - tstart))
 
             if (_epoch % self.log_freq ==0 or _epoch == self.total_epoch - 1):
                 self.test_agent()
@@ -184,12 +186,13 @@ class sac(object):
                 logger.dump_tabular()
                 self._epoch = _epoch
                 # self.save_model()
+            self.lr_scheduler.step()
+
 
     def update(self):
-        for _ in range(self.update_every):
+        for _ in range(0, self.update_every, self.update_nbatch):
             self.optimizer.zero_grad()
-
-            data = self.buffer.sample_batch(self.batch_size)
+            data = self.buffer.sample_batch(self.batch_size * self.update_nbatch)
             o, a, r, o2, d = data['obs'], data['act'], data['rew'], data['obs2'], data['done']
 
             # compute loss q
@@ -205,7 +208,8 @@ class sac(object):
             loss_q1 = torch.mean(torch.square(q1 - backup))
             loss_q2 = torch.mean(torch.square(q2 - backup))
             loss_q = loss_q1 + loss_q2
-            loss_q.backward()
+            nbatch_loss_q = (self.update_nbatch * loss_q)
+            nbatch_loss_q.backward()
             # compute loss pi
             for p in self.ac.q1.parameters():
                 p.requires_grad = False
@@ -216,7 +220,8 @@ class sac(object):
             q2_pi = self.ac.q2(o, pi)
             q_pi = torch.min(q1_pi, q2_pi)
             loss_pi = torch.mean((self.alpha * logp_pi - q_pi))
-            loss_pi.backward()
+            nbatch_loss_pi = (self.update_nbatch * loss_pi)
+            nbatch_loss_pi.backward()
             self.optimizer.step()
             for p in self.ac.q1.parameters():
                 p.requires_grad = True
@@ -228,6 +233,7 @@ class sac(object):
                 for p, p_targ in zip(self.ac.parameters(), self.ac_targ.parameters()):
                     p_targ.data.mul_(self.polyak)
                     p_targ.data.add_((1 - self.polyak) * p.data)
+
 
     def test_agent(self):
         for j in range(self.num_test_episodes):
