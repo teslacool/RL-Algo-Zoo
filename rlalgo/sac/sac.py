@@ -231,8 +231,8 @@ class sac(object):
             logger.logkv_mean('loss_pi', loss_pi.item())
             with torch.no_grad():
                 for p, p_targ in zip(self.ac.parameters(), self.ac_targ.parameters()):
-                    p_targ.data.mul_(self.polyak)
-                    p_targ.data.add_((1 - self.polyak) * p.data)
+                    p_targ.data.mul_(self.polyak * self.update_nbatch)
+                    p_targ.data.add_((1 - self.polyak * self.update_nbatch) * p.data)
 
 
     def test_agent(self):
