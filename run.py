@@ -60,7 +60,7 @@ def main():
         shutil.rmtree(logpath)
     configure_logger(logpath)
 
-    env_fn = lambda norm : build_env(args, norm=norm)
+    env_fn = lambda envargs : build_env(args, **envargs)
     args.env_fn = env_fn
     algo = rlalgo.build_algo(args)
 

@@ -60,7 +60,7 @@ class sac(object):
                  nsteps=2048, n_timesteps=1e6, gamma=0.99, replay_size=int(1e6),
                  polyak=0.995, lr=3e-4, batch_size=256, start_steps=10000,
                  update_after=1000, num_test_episodes=10, max_ep_len=1000,
-                 log_freq=10, load=False, update_every=50, alpha=0.2):
+                 log_freq=10, load=False, update_every=1, alpha=0.2):
         self.batch_size = batch_size
         self.start_steps =start_steps
         self.update_after = update_after
@@ -74,7 +74,8 @@ class sac(object):
         self.polyak = polyak
         self.alpha = alpha
         # mujoco num_env=1
-        self.train_env, self.test_env = env_fn(False), env_fn(False)
+        self.train_env, self.test_env = env_fn({'norm': False}), env_fn({'norm': False})
+        self.nenv = self.train_env.num_envs
         self.ac = core.MLPActorCritic(self.train_env.observation_space, self.train_env.action_space,
                                       env=self.train_env, **ac_kwargs)
         self.ac_targ = deepcopy(self.ac)
@@ -138,7 +139,7 @@ class sac(object):
 
     def train(self):
 
-        o, ep_ret, ep_len = self.train_env.reset(), 0, 0
+        o = self.train_env.reset()
         first_tstart = time.perf_counter()
         for _epoch in range(self._epoch, self.total_epoch):
             tstart = time.perf_counter()
@@ -148,22 +149,17 @@ class sac(object):
                     a = self.ac.act(np2tentor(o))
                     a = action4env(a)
                 else:
-                    a = self.train_env.action_space.sample()
-                    a = np.expand_dims(a, 0)
-                o2, r, d, _ = self.train_env.step(a)
-                r = float(r)
-                d = bool(d)
-                ep_len += 1
-                ep_ret += r
-
-                d = False if ep_len==self.max_ep_len else d
+                    a = np.concatenate([self.train_env.action_space.sample().reshape(1, -1)
+                                        for _ in range(self.nenv)], axis=0)
+                o2, r, d, infos = self.train_env.step(a)
                 self.buffer.store(o, a, r, o2, d)
                 o = o2
 
-                if d or (ep_len == self.max_ep_len):
-                    logger.logkv_mean('eprew', ep_ret)
-                    logger.logkv_mean('eplen', ep_len)
-                    o, ep_ret, ep_len = self.train_env.reset(), 0, 0
+                for info in infos:
+                    maybeepinfo = info.get('episode')
+                    if maybeepinfo:
+                        logger.logkv_mean('eprewtrain', maybeepinfo['r'])
+                        logger.logkv_mean('eplentrain', maybeepinfo['l'])
 
                 self._t += 1
                 if self._t >= self.update_after and self._t % self.update_every == 0:
@@ -171,7 +167,7 @@ class sac(object):
                 if self._t > self.n_timesteps:
                     break
 
-            fps = int(_t / (time.perf_counter() - tstart))
+            fps = int((_t + 1) / (time.perf_counter() - tstart))
 
             if (_epoch % self.log_freq ==0 or _epoch == self.total_epoch - 1):
                 self.test_agent()
@@ -183,6 +179,7 @@ class sac(object):
                 logger.dump_tabular()
                 self._epoch = _epoch
                 # self.save_model()
+            self.lr_scheduler.step()
 
     def update(self):
         for _ in range(self.update_every):
@@ -230,17 +227,20 @@ class sac(object):
 
     def test_agent(self):
         for j in range(self.num_test_episodes):
-            o, d, ep_ret, ep_len = self.test_env.reset(), False, 0, 0
-            while not(d or (ep_len == self.max_ep_len)):
+            o = self.test_env.reset()
+            i = 0
+            while True:
                 # Take deterministic actions at test time
                 a = self.ac.act(np2tentor(o), deterministic=True)
-                o, r, d, _ = self.test_env.step(tensor2np(a))
-                r = float(r)
-                d = bool(d)
-                ep_ret += r
-                ep_len += 1
-            logger.logkv_mean('testeprew', ep_ret)
-            logger.logkv_mean('testeplen', ep_len)
+                o, r, d, infos = self.test_env.step(tensor2np(a))
+                for info in infos:
+                    maybeepinfo = info.get('episode')
+                    if maybeepinfo:
+                        logger.logkv_mean('eprewmean', maybeepinfo['r'])
+                        logger.logkv_mean('eplenmean', maybeepinfo['l'])
+                        i += 1
+                        if i == 10:
+                            return
 
 
 
