@@ -18,6 +18,10 @@ setup(
         'pyyaml',
         'mpi4py',
         'tensorboard',
+        'pandas',
+        'seaborn==0.8.1',
+        'matplotlib',
+
     ],
     description="Convenient tools for me to learn RL.",
     author="Jinhua Zhu",
