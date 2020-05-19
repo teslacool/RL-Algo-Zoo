@@ -1,22 +1,18 @@
-import sys
-import re
-import multiprocessing
 import os.path as osp
 import gym
-from collections import defaultdict
-import torch
-import numpy as np
+import json
 import difflib
 import os
 import rlalgo
 from rlalgo import options
-from hyperparams import load_hyperparams
 try:
     from mpi4py import MPI
 except ImportError:
     MPI = None
 from common import logger
 from common.buildenv import build_env
+from common.util import convert_json
+
 
 def check_valid_env(env_id):
     registered_envs = set(gym.envs.registry.env_specs.keys())
@@ -64,6 +60,7 @@ def main():
     args.env_fn = env_fn
     algo = rlalgo.build_algo(args)
 
+    logger.log(json.dumps(convert_json(vars(args)), separators=(',',':\t'), indent=4, sort_keys=True))
     if not args.play:
         algo.train()
     else:
