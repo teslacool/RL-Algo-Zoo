@@ -42,7 +42,7 @@ def get_datasets(logdir, condition=None, **kwargs):
 def get_all_dataset(all_logdirs, legend=None, select=None, exclude=None, **kwargs):
     logdirs = []
     for logdir in all_logdirs:
-        if osp.isdir(logdir) and logdir[-1] == os.osp:
+        if osp.isdir(logdir) and logdir[-1] == os.sep:
             logdirs.append(logdir)
         else:
             basedir = osp.dirname(logdir)
@@ -90,11 +90,11 @@ def plot_data(data, xaxis='timesteps', value="Performance", condition="Condition
     if isinstance(data, list):
         data = pd.concat(data, ignore_index=True)
     fig = plt.figure(kwargs['figname'], figsize=(8, 6))
-    sns.set(style="darkgrid", font_scale=1.8)
+    sns.set(style="darkgrid", font_scale=2)
     sns.tsplot(data=data, time=xaxis, value=value, unit="Unit", condition=condition, ci='sd',)
     plt.xlabel(kwargs['xlabel'])
     plt.ylabel(kwargs['ylabel'])
-    plt.legend(loc='best').set_draggable(True)
+    plt.legend(loc='best', fontsize=24 ).set_draggable(True)
     xscale = np.max(np.asarray(data[xaxis])) > 5e3
     if xscale:
         # Just some formatting niceness: x-axis scale in scientific notation if max x is large
