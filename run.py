@@ -51,7 +51,7 @@ def main():
     check_valid_algo(algo)
 
     logpath = os.path.join(args.log_path, args.exp_name)
-    if args.rm_prev_log and osp.exists(logpath):
+    if not args.keep_prev_log and osp.exists(logpath):
         import shutil
         shutil.rmtree(logpath)
     configure_logger(logpath)

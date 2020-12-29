@@ -58,11 +58,11 @@ def get_common_parser(desc):
     parser = argparse.ArgumentParser(desc)
     common_group = parser.add_argument_group('common configuration',
                                              argument_default=argparse.SUPPRESS)
-    common_group.add_argument('--env', help='environment ID', type=str, default='PongNoFrameskip-v4')
+    common_group.add_argument('--env', help='environment ID', type=str, default='Walker2d-v2')
     common_group.add_argument('--env_type', help='type of environment, used when the environment type cannot be automatically determined',
                               type=str, default=None)
-    common_group.add_argument('--algo', help='Algorithm', type=str, default='ppo')
-    common_group.add_argument('--log-freq', help='Override log interval (default: -1, no change)', type=int)
+    common_group.add_argument('--algo', help='Algorithm', type=str, default='sac')
+    common_group.add_argument('--log-freq', help='Override log interval (default: -1, no change)', type=int, default=1)
     common_group.add_argument('--eval-freq', help='Evaluate the agent every n steps (if negative, no evaluation)',
                         default=-1, type=int)
     common_group.add_argument('--save-freq', help='Save the model every n steps (if negative, no checkpoint)',
@@ -77,7 +77,7 @@ def get_common_parser(desc):
     common_group.add_argument('--save_video_interval', help='Save video every x steps (0 = disabled)', default=0, type=int)
     common_group.add_argument('--save_video_length', help='Length of recorded video. Default: 200', default=200, type=int)
     common_group.add_argument('--log_path', help='Directory to save learning curve data.', default='logs', type=str)
-    common_group.add_argument('--rm_prev_log', default=False, action='store_true')
+    common_group.add_argument('--keep_prev_log', default=False, action='store_true')
     common_group.add_argument('--play', default=False, action='store_true')
     common_group.add_argument('--exp_name', default='debug', type=str)
     common_group.add_argument('--gamestate', help='game state to load (so far only used in retro games)', default=None)

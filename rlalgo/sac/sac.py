@@ -99,7 +99,7 @@ class sac(object):
         self._t = 0
         self.optimizer = torch.optim.Adam(self.ac.parameters(), lr=lr_start)
         self.total_epoch = math.ceil(n_timesteps / nsteps)
-        self.lr_lambda = lr_lambda = lambda epoch: lr(max(1e-4, 1 - epoch / self.total_epoch)) / lr_start
+        self.lr_lambda = lr_lambda = lambda epoch: max(1e-4, 1 - epoch / self.total_epoch)
         self.lr_scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda)
 
         preparemodel(self.ac)
